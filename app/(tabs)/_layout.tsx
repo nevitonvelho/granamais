@@ -1,9 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
+import { useAuth } from '../../context/AuthContext';
 
 export default function TabLayout() {
+  const { user, loading } = useAuth();
+
+  // Evita piscar entre login e tabs
+  if (loading) return null;
+
+  // Se não estiver logado → manda para login
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -34,36 +45,37 @@ export default function TabLayout() {
         options={{
           title: 'Início',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "home" : "home-outline"} 
-              size={size} 
-              color={color} 
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={size}
+              color={color}
             />
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="ChartsScreen"
         options={{
           title: 'Gráficos',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "bar-chart" : "bar-chart-outline"} 
-              size={size} 
-              color={color} 
+            <Ionicons
+              name={focused ? "bar-chart" : "bar-chart-outline"}
+              size={size}
+              color={color}
             />
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="AddTransactionScreen"
         options={{
           title: '',
           tabBarButton: (props) => (
-            <TouchableOpacity 
-              style={styles.addButton}
+            <TouchableOpacity
+              {...props}
+              style={[styles.addButton, props.style]}
               onPress={() => router.push('/(tabs)/AddTransactionScreen')}
             >
               <Ionicons name="add" size={28} color="white" />
@@ -71,30 +83,30 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="StatementScreen"
         options={{
           title: 'Extrato',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "list" : "list-outline"} 
-              size={size} 
-              color={color} 
+            <Ionicons
+              name={focused ? "list" : "list-outline"}
+              size={size}
+              color={color}
             />
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="ProfileScreen"
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "person" : "person-outline"} 
-              size={size} 
-              color={color} 
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={size}
+              color={color}
             />
           ),
         }}

@@ -1,107 +1,121 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const transactionsData = [
-  {
-    id: '1',
-    description: 'Mercado',
-    amount: -150.75,
-    category: 'Alimentação',
-    date: '2024-01-15',
-    type: 'expense',
-    icon: 'cart-outline'
-  },
-  {
-    id: '2',
-    description: 'Salário',
-    amount: 2500.00,
-    category: 'Receita',
-    date: '2024-01-10',
-    type: 'income',
-    icon: 'card-outline'
-  },
-  {
-    id: '3',
-    description: 'Uber',
-    amount: -25.50,
-    category: 'Transporte',
-    date: '2024-01-14',
-    type: 'expense',
-    icon: 'car-outline'
-  },
-  {
-    id: '4',
-    description: 'Academia',
-    amount: -89.90,
-    category: 'Saúde',
-    date: '2024-01-12',
-    type: 'expense',
-    icon: 'fitness-outline'
-  },
-  {
-    id: '5',
-    description: 'Restaurante',
-    amount: -85.00,
-    category: 'Alimentação',
-    date: '2024-01-11',
-    type: 'expense',
-    icon: 'restaurant-outline'
-  },
-  {
-    id: '6',
-    description: 'Freelance',
-    amount: 500.00,
-    category: 'Receita',
-    date: '2024-01-08',
-    type: 'income',
-    icon: 'laptop-outline'
-  },
-  {
-    id: '7',
-    description: 'Cinema',
-    amount: -45.00,
-    category: 'Lazer',
-    date: '2024-01-05',
-    type: 'expense',
-    icon: 'film-outline'
-  },
-];
+import { auth, db } from '../../firebase/firebaseConfig';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 export default function StatementScreen() {
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
 
-  const filteredTransactions = transactionsData.filter(transaction => {
-    const matchesSearch = transaction.description.toLowerCase().includes(searchText.toLowerCase()) ||
-                         transaction.category.toLowerCase().includes(searchText.toLowerCase());
-    const matchesFilter = filter === 'all' || 
-                         (filter === 'income' && transaction.amount > 0) ||
-                         (filter === 'expense' && transaction.amount < 0);
-    
-    return matchesSearch && matchesFilter;
-  });
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
 
-  const totalIncome = filteredTransactions
-    .filter(t => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0);
+    const q = query(
+      collection(db, 'users', user.uid, 'transactions'),
+      orderBy('createdAt', 'desc')
+    );
 
-  const totalExpenses = filteredTransactions
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items: any[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        items.push({
+          id: doc.id,
+          description: data.description,
+          amount: Number(data.amount),
+          category: data.category,
+          type: data.type,
+          icon: data.icon || 'card-outline',
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+        });
+      });
 
-  const balance = totalIncome - totalExpenses;
+      setTransactions(items);
+      setLoading(false);
+    });
 
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
+    return unsubscribe;
+  }, []);
+
+  // ------------------ FILTROS DE PERÍODO ------------------
+
+  const filterByPeriod = (items: any[]) => {
+    const now = new Date();
+
+    return items.filter((t) => {
+      if (!t.createdAt) return false;
+
+      const date = new Date(t.createdAt);
+
+      if (selectedPeriod === 'today') {
+        return (
+          date.getDate() === now.getDate() &&
+          date.getMonth() === now.getMonth() &&
+          date.getFullYear() === now.getFullYear()
+        );
+      }
+
+      if (selectedPeriod === 'week') {
+        const diff = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+        return diff <= 7;
+      }
+
+      if (selectedPeriod === 'month') {
+        return (
+          date.getMonth() === now.getMonth() &&
+          date.getFullYear() === now.getFullYear()
+        );
+      }
+
+      return true;
     });
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  // ------------------ FILTROS DE BUSCA E TIPO ------------------
+
+  const filteredTransactions = filterByPeriod(transactions).filter((transaction) => {
+    const matchesSearch =
+      transaction.description.toLowerCase().includes(searchText.toLowerCase()) ||
+      transaction.category.toLowerCase().includes(searchText.toLowerCase());
+
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'income' && transaction.type === 'income') ||
+      (filter === 'expense' && transaction.type === 'expense');
+
+    return matchesSearch && matchesFilter;
+  });
+
+  // ------------------ CÁLCULOS ------------------
+
+  const totalIncome = filteredTransactions
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpenses = filteredTransactions
+    .filter((t) => t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const balance = totalIncome - totalExpenses;
+
+  const formatCurrency = (value: number) =>
+    value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const formatDate = (date: Date) => {
     return date.toLocaleDateString('pt-BR');
   };
 
@@ -118,8 +132,17 @@ export default function StatementScreen() {
     return colors[category] || '#95a5a6';
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#22C55E" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Extrato</Text>
         <TouchableOpacity style={styles.exportButton}>
@@ -128,14 +151,18 @@ export default function StatementScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Resumo */}
         <View style={styles.summaryContainer}>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Saldo do Período</Text>
-            <Text style={[styles.balanceValue, { color: balance >= 0 ? '#22C55E' : '#EF4444' }]}>
+            <Text style={[
+              styles.balanceValue,
+              { color: balance >= 0 ? '#22C55E' : '#EF4444' }
+            ]}>
               {formatCurrency(balance)}
             </Text>
           </View>
-          
+
           <View style={styles.incomeExpenseRow}>
             <View style={styles.incomeExpenseItem}>
               <Ionicons name="arrow-up" size={16} color="#22C55E" />
@@ -144,7 +171,7 @@ export default function StatementScreen() {
                 {formatCurrency(totalIncome)}
               </Text>
             </View>
-            
+
             <View style={styles.incomeExpenseItem}>
               <Ionicons name="arrow-down" size={16} color="#EF4444" />
               <Text style={styles.incomeExpenseLabel}>Despesas</Text>
@@ -155,7 +182,9 @@ export default function StatementScreen() {
           </View>
         </View>
 
+        {/* Filtros */}
         <View style={styles.filtersContainer}>
+          {/* Busca */}
           <View style={styles.searchContainer}>
             <Ionicons name="search-outline" size={20} color="#666" />
             <TextInput
@@ -164,13 +193,9 @@ export default function StatementScreen() {
               value={searchText}
               onChangeText={setSearchText}
             />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText('')}>
-                <Ionicons name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
-            )}
           </View>
 
+          {/* Tipo */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
             {[
               { key: 'all', label: 'Todos' },
@@ -197,6 +222,7 @@ export default function StatementScreen() {
             ))}
           </ScrollView>
 
+          {/* Período */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodRow}>
             {[
               { key: 'today', label: 'Hoje' },
@@ -225,24 +251,18 @@ export default function StatementScreen() {
           </ScrollView>
         </View>
 
+        {/* Lista */}
         <View style={styles.transactionsContainer}>
           <View style={styles.transactionsHeader}>
             <Text style={styles.transactionsTitle}>
               {filteredTransactions.length} Transações
             </Text>
-            <TouchableOpacity style={styles.sortButton}>
-              <Ionicons name="filter" size={16} color="#666" />
-              <Text style={styles.sortButtonText}>Ordenar</Text>
-            </TouchableOpacity>
           </View>
 
           {filteredTransactions.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={64} color="#ddd" />
               <Text style={styles.emptyStateText}>Nenhuma transação encontrada</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Tente ajustar os filtros ou buscar por outros termos
-              </Text>
             </View>
           ) : (
             filteredTransactions.map((transaction) => (
@@ -251,34 +271,33 @@ export default function StatementScreen() {
                   styles.transactionIcon,
                   { backgroundColor: getCategoryColor(transaction.category) + '20' }
                 ]}>
-                  <Ionicons 
-                    name={transaction.icon as any} 
-                    size={20} 
-                    color={getCategoryColor(transaction.category)} 
+                  <Ionicons
+                    name={transaction.icon}
+                    size={20}
+                    color={getCategoryColor(transaction.category)}
                   />
                 </View>
-                
+
                 <View style={styles.transactionInfo}>
                   <Text style={styles.transactionDescription}>
                     {transaction.description}
                   </Text>
                   <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionCategory}>
-                      {transaction.category}
-                    </Text>
+                    <Text style={styles.transactionCategory}>{transaction.category}</Text>
                     <Text style={styles.transactionDate}>
-                      {formatDate(transaction.date)}
+                      {formatDate(transaction.createdAt)}
                     </Text>
                   </View>
                 </View>
-                
-                <Text 
+
+                <Text
                   style={[
                     styles.transactionAmount,
-                    { color: transaction.amount > 0 ? '#22C55E' : '#EF4444' }
+                    { color: transaction.type === 'income' ? '#22C55E' : '#EF4444' }
                   ]}
                 >
-                  {transaction.amount > 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                  {transaction.type === 'income' ? '+' : '-'}
+                  {formatCurrency(transaction.amount)}
                 </Text>
               </View>
             ))
@@ -289,54 +308,23 @@ export default function StatementScreen() {
   );
 }
 
+// ------------------------- STYLES -------------------------
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingTop: 60,
-  },
+  container: { flex: 1, backgroundColor: '#f8f9fa', paddingTop: 60 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-  },
-  exportButton: {
-    padding: 8,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    elevation: 2,
-  },
-  summaryContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  balanceCard: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
-    elevation: 2,
-    marginBottom: 12,
-  },
-  balanceLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  balanceValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  incomeExpenseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#2c3e50' },
+  exportButton: { padding: 8, backgroundColor: 'white', borderRadius: 8, elevation: 2 },
+
+  summaryContainer: { paddingHorizontal: 20, marginBottom: 20 },
+  balanceCard: { backgroundColor: 'white', padding: 20, borderRadius: 16, elevation: 2 },
+  balanceLabel: { fontSize: 14, color: '#666' },
+  balanceValue: { fontSize: 28, fontWeight: 'bold' },
+
+  incomeExpenseRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   incomeExpenseItem: {
     flex: 1,
     backgroundColor: 'white',
@@ -346,20 +334,11 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignItems: 'center',
   },
-  incomeExpenseLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  incomeExpenseValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  filtersContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+  incomeExpenseLabel: { fontSize: 12, color: '#666' },
+  incomeExpenseValue: { fontSize: 16, fontWeight: 'bold' },
+
+  // Filters
+  filtersContainer: { paddingHorizontal: 20, marginBottom: 20 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -367,18 +346,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 12,
     elevation: 2,
+    marginBottom: 10,
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    marginRight: 8,
-    fontSize: 16,
-  },
-  filterRow: {
-    marginBottom: 8,
-  },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 16 },
+
+  filterRow: { marginBottom: 8 },
   filterButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -387,20 +360,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     elevation: 1,
   },
-  filterButtonActive: {
-    backgroundColor: '#22C55E',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  filterButtonTextActive: {
-    color: 'white',
-  },
-  periodRow: {
-    marginBottom: 8,
-  },
+  filterButtonActive: { backgroundColor: '#22C55E' },
+  filterButtonText: { color: '#666', fontWeight: '600' },
+  filterButtonTextActive: { color: 'white' },
+
+  periodRow: {},
   periodButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -409,74 +373,24 @@ const styles = StyleSheet.create({
     marginRight: 8,
     elevation: 1,
   },
-  periodButtonActive: {
-    backgroundColor: '#22C55E',
-  },
-  periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  periodButtonTextActive: {
-    color: 'white',
-  },
-  transactionsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  transactionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  transactionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    elevation: 1,
-  },
-  sortButtonText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    elevation: 2,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
+  periodButtonActive: { backgroundColor: '#22C55E' },
+  periodButtonText: { color: '#666', fontWeight: '600' },
+  periodButtonTextActive: { color: 'white' },
+
+  transactionsContainer: { paddingHorizontal: 20 },
+  transactionsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  transactionsTitle: { fontSize: 18, fontWeight: 'bold' },
+
+  emptyState: { alignItems: 'center', padding: 40, backgroundColor: 'white', borderRadius: 12 },
+  emptyStateText: { marginTop: 10, fontSize: 16, color: '#666' },
+
   transactionCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 8,
-    elevation: 1,
+    marginBottom: 10,
+    elevation: 2,
   },
   transactionIcon: {
     width: 40,
@@ -486,34 +400,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionDescription: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 4,
-  },
-  transactionMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  transactionInfo: { flex: 1 },
+  transactionDescription: { fontSize: 16, fontWeight: '600' },
+  transactionMeta: { flexDirection: 'row', marginTop: 4 },
   transactionCategory: {
-    fontSize: 12,
-    color: '#666',
-    marginRight: 8,
+    marginRight: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     backgroundColor: '#f1f3f4',
     borderRadius: 4,
-  },
-  transactionDate: {
     fontSize: 12,
-    color: '#999',
+    color: '#555',
   },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  transactionDate: { fontSize: 12, color: '#777' },
+
+  transactionAmount: { fontSize: 16, fontWeight: 'bold' },
 });

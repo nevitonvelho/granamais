@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../../firebase/firebaseConfig';
+import { signOut } from 'firebase/auth';
+import { router } from 'expo-router';
 
 export default function ProfileScreen() {
   const [user, setUser] = useState({
     name: 'Neviton Velho',
-    email: 'nevitonvelho01@gmail.com',
+    email: auth.currentUser?.email ?? '...',
     phone: '(11) 99999-9999',
     joinDate: '15/01/2023',
   });
@@ -36,27 +39,9 @@ export default function ProfileScreen() {
       title: 'Preferências',
       icon: 'settings-outline',
       items: [
-        { 
-          icon: 'notifications-outline', 
-          label: 'Notificações', 
-          type: 'switch' as const,
-          value: notifications,
-          onValueChange: setNotifications
-        },
-        { 
-          icon: 'finger-print-outline', 
-          label: 'Biometria', 
-          type: 'switch' as const,
-          value: biometric,
-          onValueChange: setBiometric
-        },
-        { 
-          icon: 'moon-outline', 
-          label: 'Modo Escuro', 
-          type: 'switch' as const,
-          value: darkMode,
-          onValueChange: setDarkMode
-        },
+        { icon: 'notifications-outline', label: 'Notificações', type: 'switch', value: notifications, onValueChange: setNotifications },
+        { icon: 'finger-print-outline', label: 'Biometria', type: 'switch', value: biometric, onValueChange: setBiometric },
+        { icon: 'moon-outline', label: 'Modo Escuro', type: 'switch', value: darkMode, onValueChange: setDarkMode },
       ]
     },
     {
@@ -79,10 +64,22 @@ export default function ProfileScreen() {
   const quickActions = [
     { icon: 'share-social-outline', label: 'Indicar Amigos', onPress: () => Alert.alert('Indicar', 'Em desenvolvimento') },
     { icon: 'star-outline', label: 'Avaliar App', onPress: () => Alert.alert('Avaliar', 'Em desenvolvimento') },
-    { icon: 'log-out-outline', label: 'Sair', onPress: () => Alert.alert('Sair', 'Tem certeza que deseja sair?', [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', style: 'destructive' }
-      ]) 
+    { 
+      icon: 'log-out-outline',
+      label: 'Sair',
+      onPress: () => {
+        Alert.alert('Sair', 'Tem certeza que deseja sair?', [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Sair',
+            style: 'destructive',
+            onPress: async () => {
+              await signOut(auth);
+              router.replace('/(auth)/login');
+            }
+          }
+        ])
+      }
     },
   ];
 
@@ -97,7 +94,8 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Seção do Perfil */}
+        
+        {/* Perfil */}
         <View style={styles.profileSection}>
           <TouchableOpacity style={styles.avatarContainer} onPress={handleChangePhoto}>
             <View style={styles.avatarPlaceholder}>
@@ -123,7 +121,7 @@ export default function ProfileScreen() {
           {stats.map((stat, index) => (
             <View key={index} style={styles.statCard}>
               <View style={styles.statIcon}>
-                <Ionicons name={stat.icon as any} size={20} color="#22C55E" />
+                <Ionicons name={stat.icon} size={20} color="#22C55E" />
               </View>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
@@ -131,15 +129,15 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* Menu de Opções */}
+        {/* Menu */}
         <View style={styles.menuContainer}>
           {menuItems.map((section, sectionIndex) => (
             <View key={sectionIndex} style={styles.menuSection}>
               <View style={styles.sectionHeader}>
-                <Ionicons name={section.icon as any} size={20} color="#666" />
+                <Ionicons name={section.icon} size={20} color="#666" />
                 <Text style={styles.sectionTitle}>{section.title}</Text>
               </View>
-              
+
               <View style={styles.sectionItems}>
                 {section.items.map((item, itemIndex) => (
                   <TouchableOpacity
@@ -149,10 +147,10 @@ export default function ProfileScreen() {
                     disabled={item.type === 'switch'}
                   >
                     <View style={styles.menuItemLeft}>
-                      <Ionicons name={item.icon as any} size={22} color="#666" />
+                      <Ionicons name={item.icon} size={22} color="#666" />
                       <Text style={styles.menuItemText}>{item.label}</Text>
                     </View>
-                    
+
                     {item.type === 'switch' ? (
                       <Switch
                         value={item.value}
@@ -179,7 +177,7 @@ export default function ProfileScreen() {
               onPress={action.onPress}
             >
               <Ionicons 
-                name={action.icon as any} 
+                name={action.icon}
                 size={20} 
                 color={action.label === 'Sair' ? '#EF4444' : '#666'} 
               />
@@ -193,14 +191,15 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* Versão do App */}
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>Grana+ v1.0.0</Text>
         </View>
+
       </ScrollView>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
