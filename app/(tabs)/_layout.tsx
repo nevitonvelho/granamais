@@ -1,16 +1,14 @@
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 
 export default function TabLayout() {
   const { user, loading } = useAuth();
 
-  // Evita piscar entre login e tabs
   if (loading) return null;
 
-  // Se não estiver logado → manda para login
   if (!user) {
     return <Redirect href="/(auth)/login" />;
   }
@@ -40,6 +38,8 @@ export default function TabLayout() {
         },
       }}
     >
+
+      {/* INÍCIO */}
       <Tabs.Screen
         name="DashboardScreen"
         options={{
@@ -54,6 +54,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* GRÁFICOS */}
       <Tabs.Screen
         name="ChartsScreen"
         options={{
@@ -68,22 +69,25 @@ export default function TabLayout() {
         }}
       />
 
+      {/* BOTÃO CENTRAL */}
       <Tabs.Screen
         name="AddTransactionScreen"
         options={{
           title: '',
-          tabBarButton: (props) => (
-            <TouchableOpacity
-              {...props}
-              style={[styles.addButton, props.style]}
-              onPress={() => router.push('/(tabs)/AddTransactionScreen')}
-            >
-              <Ionicons name="add" size={28} color="white" />
-            </TouchableOpacity>
+          tabBarButton: () => (
+            <View style={styles.fabWrapper}>
+              <TouchableOpacity
+                style={styles.fabButton}
+                onPress={() => router.push('/(tabs)/AddTransactionScreen')}
+              >
+                <Ionicons name="add" size={32} color="white" />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
 
+      {/* EXTRATO */}
       <Tabs.Screen
         name="StatementScreen"
         options={{
@@ -98,6 +102,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* PERFIL */}
       <Tabs.Screen
         name="ProfileScreen"
         options={{
@@ -115,22 +120,32 @@ export default function TabLayout() {
   );
 }
 
+
 const styles = StyleSheet.create({
-  addButton: {
-    backgroundColor: '#22C55E',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
+  fabWrapper: {
+    position: 'absolute',
+    top: -25,
+    width: 80,
+    height: 80,
     justifyContent: 'center',
-    marginTop: -25,
+    alignItems: 'center',
+  },
+
+  fabButton: {
+    backgroundColor: '#22C55E',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    justifyContent: 'center',
+    alignItems: 'center',
+
+    borderWidth: 3,
+    borderColor: 'white',
+
     shadowColor: '#22C55E',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 10,
   },
 });

@@ -323,6 +323,7 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginTop: 10,
     marginBottom: 10,
+    paddingHorizontal: 20,
   },
 
   seeAllText: { color: '#22C55E', fontWeight: '600' },
